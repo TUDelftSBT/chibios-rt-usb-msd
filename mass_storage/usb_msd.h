@@ -182,6 +182,9 @@ void msdConfigureHookI(USBDriver *usbp);
  */
 bool_t msdRequestsHook(USBDriver *usbp);
 
+bool_t msdRequestsHook(USBDriver *usbp);
+void msdConfigureHookI(USBDriver *usbp);
+void msdUsbEvent(USBDriver *usbp, usbep_t ep);
 #ifdef __cplusplus
 }
 #endif

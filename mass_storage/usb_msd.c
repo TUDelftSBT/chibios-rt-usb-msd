@@ -107,32 +107,6 @@ static uint8_t rw_buf[2][512];
 static void msd_handle_end_point_notification(USBDriver *usbp, usbep_t ep);
 
 /**
- * @brief IN end-point 1 state
- */
-static USBInEndpointState ep1_in_state;
-
-/**
- * @brief OUT end-point 1 state
- */
-static USBOutEndpointState ep1_out_state;
-
-/**
- * @brief End-point 1 initialization structure
- */
-static const USBEndpointConfig ep_data_config = {
-    USB_EP_MODE_TYPE_BULK,
-    NULL,
-    msd_handle_end_point_notification,
-    msd_handle_end_point_notification,
-    64,
-    64,
-    &ep1_in_state,
-    &ep1_out_state,
-    1,
-    NULL
-};
-
-/**
  * @brief   USB device configured handler.
  *
  * @param[in] usbp      pointer to the @p USBDriver object
@@ -142,8 +116,6 @@ static const USBEndpointConfig ep_data_config = {
 void msdConfigureHookI(USBDriver *usbp)
 {
     USBMassStorageDriver *msdp = (USBMassStorageDriver *)usbp->param;
-
-    usbInitEndpointI(usbp, msdp->config->bulk_ep, &ep_data_config);
     chBSemSignalI(&msdp->bsem);
     chEvtBroadcastI(&msdp->evt_connected);
 }
@@ -161,10 +133,6 @@ bool_t msdRequestsHook(USBDriver *usbp) {
     /* check that the request is of type Class / Interface */
     if (((usbp->setup[0] & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) &&
         ((usbp->setup[0] & USB_RTYPE_RECIPIENT_MASK) == USB_RTYPE_RECIPIENT_INTERFACE)) {
-
-        /* check that the request is for interface 0 */
-        if (MSD_SETUP_INDEX(usbp->setup) != 0)
-            return FALSE;
 
         /* act depending on bRequest = setup[1] */
         switch (usbp->setup[1]) {
