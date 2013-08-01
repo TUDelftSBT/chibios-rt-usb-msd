@@ -1,6 +1,6 @@
 /**
- * @file    usb_msd.h
  * @brief   USB mass storage driver and functions
+ * @file    usb_msd.h
  */
 
 #ifndef _USB_MSD_H_
@@ -63,7 +63,7 @@ PACK_STRUCT_BEGIN typedef struct
 typedef enum {
     MSD_IDLE,
     MSD_READ_COMMAND_BLOCK,
-    MSD_EJECTED
+    MSD_RESET
 } msd_state_t;
 
 /**
@@ -76,14 +76,21 @@ typedef struct {
     USBDriver *usbp;
 
     /**
-    * @brief Block device to use for storage
-    */
-    BaseBlockDevice *bbdp;
+       * @brief   Control interface number
+       * @note    Only used in composite USB device.
+       *          Default is 0 which is good for single device.
+       */
+    uint8_t control_interface;
 
     /**
-    * @brief Index of the USB endpoint to use for transfers
-    */
-    usbep_t bulk_ep;
+     * @brief   Bulk out endpoint number
+     */
+    uint8_t bulk_out_ep;
+
+    /**
+     * @brief   Bulk in endpoint number
+     */
+    uint8_t bulk_in_ep;
 
     /**
     * @brief Optional callback that will be called whenever there is
@@ -118,19 +125,30 @@ typedef struct {
  * @details This structure holds all the states and members of a USB mass
  *          storage driver.
  */
-typedef struct {
+
+typedef struct USBMassStorageDriver USBMassStorageDriver;
+
+struct USBMassStorageDriver {
     const USBMassStorageConfig* config;
-	BinarySemaphore bsem;
+    BinarySemaphore bsem;
     Thread* thread;
-	EventSource evt_connected, evt_ejected;
-	BlockDeviceInfo block_dev_info;
-	msd_state_t state;
-	msd_cbw_t cbw;
-	msd_csw_t csw;
-	msd_scsi_sense_response_t sense;
-	msd_scsi_inquiry_response_t inquiry;
-	bool_t result;
-} USBMassStorageDriver;
+    EventSource evt_ejected;
+
+    /**
+    * @brief Block device to use for storage
+    */
+    BaseBlockDevice *bbdp;
+    bool_t eject_requested;
+
+    BlockDeviceInfo block_dev_info;
+    msd_state_t state;
+    msd_cbw_t cbw;
+    msd_csw_t csw;
+    msd_scsi_sense_response_t sense;
+    msd_scsi_inquiry_response_t inquiry;
+    /* Linked list to the next serial USB driver */
+    USBMassStorageDriver *driver_next;
+};
 
 #ifdef __cplusplus
 extern "C" {
@@ -139,14 +157,12 @@ extern "C" {
 /**
  * @brief   Initializes a USB mass storage driver.
  */
-void msdInit(USBMassStorageDriver *msdp);
+void msdObjectInit(USBMassStorageDriver *msdp);
 
 /**
  * @brief   Starts a USB mass storage driver.
  * @details This function is sufficient to have USB mass storage running, it internally
  *          runs a thread that handles USB requests and transfers.
- *          The block device must be connected but no file system must be mounted,
- *          everything is handled by the host system.
  */
 void msdStart(USBMassStorageDriver *msdp, const USBMassStorageConfig *config);
 
@@ -158,7 +174,21 @@ void msdStart(USBMassStorageDriver *msdp, const USBMassStorageConfig *config);
 void msdStop(USBMassStorageDriver *msdp);
 
 /**
+ * @brief   Set the device as ready, notify the host that media is inserted
+ * @details The block device must be connected before calling.
+ */
+void msdReady(USBMassStorageDriver *msdp, BaseBlockDevice *bbdp);
+
+/**
+ * @brief   Request to eject the media
+ * @details If transfer is in progress, eject will be done gracefully.
+ *          The ejected event will be notified.
+ */
+void msdEject(USBMassStorageDriver *msdp);
+
+/**
  * @brief   USB device configured handler.
+ * @details This should be called when USB_EVENT_CONFIGURED occurs
  *
  * @param[in] usbp      pointer to the @p USBDriver object
  *
@@ -167,13 +197,23 @@ void msdStop(USBMassStorageDriver *msdp);
 void msdConfigureHookI(USBDriver *usbp);
 
 /**
+ * @brief   USB device suspend handler.
+ * @details This should be called when USB_EVENT_SUSPEND occurs
+ *
+ * @param[in] usbp      pointer to the @p USBDriver object
+ *
+ * @iclass
+ */
+void msdSuspendHookI(USBDriver *usbp);
+
+/**
  * @brief   Default requests hook.
  * @details Applications wanting to use the Mass Storage over USB driver can use
  *          this function as requests hook in the USB configuration.
  *          The following requests are emulated:
  *          - MSD_REQ_RESET.
  *          - MSD_GET_MAX_LUN.
- *          .
+ *
  *
  * @param[in] usbp      pointer to the @p USBDriver object
  * @return              The hook status.
@@ -182,9 +222,12 @@ void msdConfigureHookI(USBDriver *usbp);
  */
 bool_t msdRequestsHook(USBDriver *usbp);
 
-bool_t msdRequestsHook(USBDriver *usbp);
-void msdConfigureHookI(USBDriver *usbp);
+/**
+ * @brief   USB endpoint data handler.
+ * @details Hook the Bulk-IN and Bulk-OUT endpoint callback to here
+ */
 void msdUsbEvent(USBDriver *usbp, usbep_t ep);
+
 #ifdef __cplusplus
 }
 #endif
