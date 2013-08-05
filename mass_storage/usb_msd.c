@@ -1,6 +1,6 @@
 #include "usb_msd.h"
 
-#include "mmc_spi.h";
+#include "mmc_spi.h"
 
 #if HAL_USE_MASS_STORAGE_USB || defined(__DOXYGEN__)
 
