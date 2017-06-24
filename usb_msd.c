@@ -1,9 +1,13 @@
+
+
+#ifndef HAL_USE_MASS_STORAGE_USB
+#define HAL_USE_MASS_STORAGE_USB 0
+#endif
+
+#if HAL_USE_MASS_STORAGE_USB || defined(__DOXYGEN__)
 #include "usb_msd.h"
 
 #include "mmc_spi.h"
-
-#if HAL_USE_MASS_STORAGE_USB || defined(__DOXYGEN__)
-
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
