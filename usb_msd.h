@@ -9,10 +9,15 @@
 #include "ch.h"
 #include "hal.h"
 
+#define PACK_STRUCT_FIELD(x) x __attribute__((packed))
+#define PACK_STRUCT_STRUCT __attribute__((packed))
+#define PACK_STRUCT_BEGIN
+#define PACK_STRUCT_END
+
 /**
  * @brief Command Block Wrapper structure
  */
-PACK_STRUCT_BEGIN typedef struct {
+typedef struct {
 	uint32_t signature;
 	uint32_t tag;
 	uint32_t data_len;
@@ -20,22 +25,22 @@ PACK_STRUCT_BEGIN typedef struct {
 	uint8_t lun;
 	uint8_t scsi_cmd_len;
 	uint8_t scsi_cmd_data[16];
-} PACK_STRUCT_STRUCT msd_cbw_t PACK_STRUCT_END;
+} PACK_STRUCT_STRUCT msd_cbw_t;
 
 /**
  * @brief Command Status Wrapper structure
  */
-PACK_STRUCT_BEGIN typedef struct {
+typedef struct {
 	uint32_t signature;
 	uint32_t tag;
 	uint32_t data_residue;
 	uint8_t status;
-} PACK_STRUCT_STRUCT msd_csw_t PACK_STRUCT_END;
+} PACK_STRUCT_STRUCT msd_csw_t;
 
 /**
  * @brief Structure holding sense data (status/error information)
  */
-PACK_STRUCT_BEGIN typedef struct {
+typedef struct {
 		uint8_t byte[18];
 } PACK_STRUCT_STRUCT msd_scsi_sense_response_t PACK_STRUCT_END;
 
@@ -130,15 +135,15 @@ typedef struct USBMassStorageDriver USBMassStorageDriver;
 
 struct USBMassStorageDriver {
     const USBMassStorageConfig* config;
-    BinarySemaphore bsem;
-    Thread* thread;
-    EventSource evt_ejected;
+    binary_semaphore_t bsem;
+    thread_t* thread;
+    event_source_t evt_ejected;
 
     /**
     * @brief Block device to use for storage
     */
     BaseBlockDevice *bbdp;
-    bool_t eject_requested;
+    bool eject_requested;
 
     BlockDeviceInfo block_dev_info;
     msd_state_t state;
@@ -220,7 +225,7 @@ void msdSuspendHookI(USBDriver *usbp);
  * @retval TRUE         Message handled internally.
  * @retval FALSE        Message not handled.
  */
-bool_t msdRequestsHook(USBDriver *usbp);
+bool msdRequestsHook(USBDriver *usbp);
 
 /**
  * @brief   USB endpoint data handler.
