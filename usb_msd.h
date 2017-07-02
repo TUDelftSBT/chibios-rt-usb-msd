@@ -135,7 +135,8 @@ typedef struct USBMassStorageDriver USBMassStorageDriver;
 
 struct USBMassStorageDriver {
     const USBMassStorageConfig* config;
-    binary_semaphore_t bsem;
+    binary_semaphore_t bsem_received;
+	binary_semaphore_t bsem_transmitted;
     thread_t* thread;
     event_source_t evt_ejected;
 
@@ -231,7 +232,8 @@ bool msdRequestsHook(USBDriver *usbp);
  * @brief   USB endpoint data handler.
  * @details Hook the Bulk-IN and Bulk-OUT endpoint callback to here
  */
-void msdUsbEvent(USBDriver *usbp, usbep_t ep);
+void msdUsbEventIn(USBDriver *usbp, usbep_t ep);
+void msdUsbEventOut(USBDriver *usbp, usbep_t ep);
 
 #ifdef __cplusplus
 }
