@@ -8,6 +8,7 @@
 #include "usb_msd.h"
 
 #include "mmc_spi.h"
+#include "Utils.h"
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
@@ -84,6 +85,9 @@ static USBMassStorageDriver *driver_head;
 #define SCSI_ASENSEQ_INITIALIZING_COMMAND_REQUIRED     0x02
 #define SCSI_ASENSEQ_OPERATION_IN_PROGRESS             0x07
 
+static int counter_tmp_IN = 0;
+static int counter_tmp_OUT = 0;
+
 /**
  * @brief Response to a READ_CAPACITY_10 SCSI command
  */
@@ -128,6 +132,7 @@ static uint8_t rw_buf[2][512];
  *
  * @iclass
  */
+static int counter_tmp = 0;
 void msdConfigureHookI(USBDriver *usbp)
 {
   (void) usbp;
@@ -140,6 +145,7 @@ void msdConfigureHookI(USBDriver *usbp)
 
     msdp = msdp->driver_next;
   }
+  counter_tmp++;
 }
 
 void msdSuspendHookI(USBDriver *usbp)
@@ -222,6 +228,7 @@ bool msdRequestsHook(USBDriver *usbp) {
  */
 static bool msd_wait_for_receive_complete(USBMassStorageDriver *msdp) {
     /* sleep until it completes */
+	DBG_PRNT("Waiting receive complete");
     chSysLock();
     chBSemWaitS(&msdp->bsem_received);
     uint8_t state = msdp->state;
@@ -233,8 +240,9 @@ static bool msd_wait_for_receive_complete(USBMassStorageDriver *msdp) {
 */
 static bool msd_wait_for_transmit_complete(USBMassStorageDriver *msdp) {
 	/* sleep until it completes */
+	DBG_PRNT("Waiting transmit complete");
 	chSysLock();
-	chBSemWaitS(&msdp->bsem_received);
+	chBSemWaitS(&msdp->bsem_transmitted);
 	uint8_t state = msdp->state;
 	chSysUnlock();
 	return state != MSD_RESET;
@@ -263,6 +271,17 @@ void msdUsbEventOut(USBDriver *usbp, usbep_t ep) {
     chSysLockFromISR();
     chBSemSignalI(&msdp->bsem_received);
     chSysUnlockFromISR();
+	counter_tmp_OUT++;
+}
+
+int GetCounterOut()
+{
+	return counter_tmp_OUT;
+}
+
+int GetCounterIn()
+{
+	return counter_tmp_IN;
 }
 
 /**
@@ -282,6 +301,7 @@ void msdUsbEventIn(USBDriver *usbp, usbep_t ep) {
 	chSysLockFromISR();
 	chBSemSignalI(&msdp->bsem_transmitted);
 	chSysUnlockFromISR();
+	counter_tmp_IN++;
 }
 
 /**
@@ -299,8 +319,7 @@ static void msd_start_transmit(USBMassStorageDriver *msdp, const uint8_t* buffer
  */
 static void msd_start_receive(USBMassStorageDriver *msdp, uint8_t* buffer, size_t size) {
     //usbPrepareReceive(msdp->config->usbp, msdp->config->bulk_out_ep, buffer, size);
-	if (usbGetReceiveStatusI(msdp->config->usbp, msdp->config->bulk_out_ep)) // already receivin
-		return;
+	while (usbGetReceiveStatusI(msdp->config->usbp, msdp->config->bulk_out_ep));
     chSysLock();
     usbStartReceiveI(msdp->config->usbp, msdp->config->bulk_out_ep, buffer, size);
     chSysUnlock();
@@ -368,6 +387,7 @@ static bool msd_scsi_process_inquiry(USBMassStorageDriver *msdp) {
     else
     {
         msd_start_transmit(msdp, (const uint8_t *)&msdp->inquiry, sizeof(msdp->inquiry));
+		DBG_PRNT("Wait transmit complete");
         return msd_wait_for_transmit_complete(msdp);
     }
 }
@@ -486,7 +506,7 @@ static bool msd_do_read(USBMassStorageDriver *msdp, uint32_t start, uint16_t tot
 static bool msd_scsi_process_start_read_write_10(USBMassStorageDriver *msdp) {
 
     msd_cbw_t *cbw = &(msdp->cbw);
-
+	DBG_PRNT("Starting read write");
     if (!msd_is_ready(msdp)) return FALSE;
 
     if ((cbw->scsi_cmd_data[0] == SCSI_CMD_WRITE_10) && blkIsWriteProtected(msdp->bbdp)) {
@@ -498,9 +518,9 @@ static bool msd_scsi_process_start_read_write_10(USBMassStorageDriver *msdp) {
                            SCSI_ASENSEQ_NO_QUALIFIER);
         return FALSE;
     }
-
-    uint32_t rw_block_address = swap_uint32(*(uint32_t *)&cbw->scsi_cmd_data[2]);
-    uint16_t total = swap_uint16(*(uint16_t *)&cbw->scsi_cmd_data[7]);
+	uint32_t rw_block_address = (cbw->scsi_cmd_data[5]) | (cbw->scsi_cmd_data[4] << 8) | 
+		(cbw->scsi_cmd_data[3] << 16) | (cbw->scsi_cmd_data[2] << 24);
+	uint16_t total = (cbw->scsi_cmd_data[7] << 8) | (cbw->scsi_cmd_data[8]);
 
     if (rw_block_address >= msdp->block_dev_info.blk_num) {
         /* block address is invalid, update SENSE key and return command fail */
@@ -522,7 +542,9 @@ static bool msd_scsi_process_start_read_write_10(USBMassStorageDriver *msdp) {
         return FALSE;
       }
     } else {
+		DBG_PRNT("Start reading, start: %u, total: %u", rw_block_address, total);
       if (!msd_do_read(msdp, rw_block_address, total)) {
+		  DBG_PRNT("Read failed");
         /* write failed */
         msd_scsi_set_sense(msdp,
                            SCSI_SENSE_KEY_MEDIUM_ERROR,
@@ -531,7 +553,7 @@ static bool msd_scsi_process_start_read_write_10(USBMassStorageDriver *msdp) {
         return FALSE;
       }
     }
-
+	DBG_PRNT("Read succeeded");
     return TRUE;
 }
 
@@ -617,6 +639,7 @@ static void msd_read_command_block(USBMassStorageDriver *msdp) {
         result = msd_scsi_process_inquiry(msdp);
         break;
     case SCSI_CMD_REQUEST_SENSE:
+		DBG_PRNT("Sense requested");
         result = msd_scsi_process_request_sense(msdp);
         break;
     case SCSI_CMD_READ_CAPACITY_10:
@@ -659,7 +682,7 @@ static void msd_read_command_block(USBMassStorageDriver *msdp) {
                            SCSI_SENSE_KEY_ILLEGAL_REQUEST,
                            SCSI_ASENSE_INVALID_COMMAND,
                            SCSI_ASENSEQ_NO_QUALIFIER);
-
+		DBG_PRNT("INVALID command: %u", cbw->scsi_cmd_data[0]);
         result = FALSE;
         break;
     }
@@ -698,6 +721,8 @@ static void msd_read_command_block(USBMassStorageDriver *msdp) {
     csw->data_residue = cbw->data_len;
     csw->tag = cbw->tag;
 
+	DBG_PRNT("SEND SCIS ok, length: %u", sizeof(*csw));
+
     msd_start_transmit(msdp, (const uint8_t *)csw, sizeof(*csw));
     msd_wait_for_transmit_complete(msdp);
 }
@@ -711,8 +736,10 @@ static msg_t mass_storage_thread(void *arg) {
     USBMassStorageDriver *msdp = (USBMassStorageDriver *)arg;
 
     chRegSetThreadName("USB-MSD");
+	
 
     while (!chThdShouldTerminateX()) {
+		DBG_PRNT("UMSD thread started state: %u", msdp->state);
         /* wait on data depending on the current state */
         switch (msdp->state) {
         case MSD_IDLE:
@@ -730,8 +757,10 @@ static msg_t mass_storage_thread(void *arg) {
             msdp->state = MSD_IDLE;
             break;
         }
+		DBG_PRNT("configure, IN, OUT interrupts; state: %u, %u, %u; \t%u",
+			counter_tmp, GetCounterIn(), GetCounterOut(), msdp->state);
     }
-
+	DBG_PRNT("Thread termenating");
     return 0;
 }
 

@@ -66,9 +66,9 @@ PACK_STRUCT_BEGIN typedef struct
  * @brief Possible states for the USB mass storage driver
  */
 typedef enum {
-    MSD_IDLE,
-    MSD_READ_COMMAND_BLOCK,
-    MSD_RESET
+    MSD_IDLE = 0x01,
+    MSD_READ_COMMAND_BLOCK = 0x10,
+    MSD_RESET = 0xff
 } msd_state_t;
 
 /**
@@ -234,6 +234,11 @@ bool msdRequestsHook(USBDriver *usbp);
  */
 void msdUsbEventIn(USBDriver *usbp, usbep_t ep);
 void msdUsbEventOut(USBDriver *usbp, usbep_t ep);
+
+static int counter_tmp_OUT;
+int GetCounterOut();
+static int counter_tmp_IN;
+int GetCounterIn();
 
 #ifdef __cplusplus
 }
