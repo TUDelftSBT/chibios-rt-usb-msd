@@ -416,6 +416,21 @@ static bool msd_scsi_process_read_capacity_10(USBMassStorageDriver *msdp) {
 }
 
 /**
+* @brief Processes a READ_FORMAT_CAPACITY_10 SCSI command
+*/
+static bool msd_scsi_process_read_format_capacity(USBMassStorageDriver *msdp) {
+	if (!msd_is_ready(msdp)) return FALSE;
+
+	static msd_scsi_read_format_capacities_response_t response;
+	response.capacity_list_length = 8; // we only have one capacity
+	response.block_count = msdp->block_dev_info.blk_num - 1;
+	response.desc_and_block_length = 0x02 | (msdp->block_dev_info.blk_size << 8);
+
+	msd_start_transmit(msdp, (const uint8_t *)&response, sizeof(response));
+	return msd_wait_for_transmit_complete(msdp);
+}
+
+/**
  * @brief Processes a SEND_DIAGNOSTIC SCSI command
  */
 static bool msd_scsi_process_send_diagnostic(USBMassStorageDriver *msdp) {
@@ -642,6 +657,8 @@ static void msd_read_command_block(USBMassStorageDriver *msdp) {
 		DBG_PRNT("Sense requested");
         result = msd_scsi_process_request_sense(msdp);
         break;
+	case SCSI_CMD_READ_FORMAT_CAPACITIES:
+		result = msd_scsi_process_read_format_capacity(msdp);
     case SCSI_CMD_READ_CAPACITY_10:
         result = msd_scsi_process_read_capacity_10(msdp);
         break;
