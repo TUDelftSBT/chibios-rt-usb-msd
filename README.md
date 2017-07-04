@@ -9,7 +9,12 @@ Bugs & TODO:
 * Currently the Read/Write function is written and optimized for MMC_SPI but not the generic BaseBlockDevice.
   Achieving 200KiB/s read/write over 20MHz MMC SPI 
 * Commenting and formatting.
-* 
+* Clean code from unnecessary statements
+* Replace prepare transmit and prepare receive by descent functions
+* Improve boot performance??? takes some seconds to load when plugged in
+* Device descriptor define for easy inserting in already existsing usb descriptors
+* HAL settings for IN and OUT endpoints and interface number
+* Remove daisy chaining of multiple MSDP and instead using LUN. Advantage is less endpoints used and otherwise it is just an composite device containing multiple mass storage devices...
 
 Example usage:
 --------------
