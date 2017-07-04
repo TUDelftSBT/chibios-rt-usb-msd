@@ -319,7 +319,7 @@ static void msd_start_transmit(USBMassStorageDriver *msdp, const uint8_t* buffer
  */
 static void msd_start_receive(USBMassStorageDriver *msdp, uint8_t* buffer, size_t size) {
     //usbPrepareReceive(msdp->config->usbp, msdp->config->bulk_out_ep, buffer, size);
-	while (usbGetReceiveStatusI(msdp->config->usbp, msdp->config->bulk_out_ep));
+	//while (usbGetReceiveStatusI(msdp->config->usbp, msdp->config->bulk_out_ep));
     chSysLock();
     usbStartReceiveI(msdp->config->usbp, msdp->config->bulk_out_ep, buffer, size);
     chSysUnlock();
