@@ -245,7 +245,7 @@ static bool msd_wait_for_transmit_complete(USBMassStorageDriver *msdp) {
 	while (chBSemWaitTimeoutS(&msdp->bsem_transmitted, MS2ST(1)) == MSG_TIMEOUT)
 	{// wait 1 millisecond otherwise check if endpoint stalled
 		if (usb_lld_get_status_in(msdp->config->usbp, msdp->config->bulk_in_ep) != EP_STATUS_ACTIVE)
-			return false;
+			break;
 	}
 
 	uint8_t state = msdp->state;
